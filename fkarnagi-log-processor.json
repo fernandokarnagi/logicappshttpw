@@ -1,0 +1,237 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "actions": {
+            "Create-Blob-FileName": {
+                "inputs": {
+                    "body": "@triggerBody()",
+                    "headers": {
+                        "ReadFileMetadataFromServer": true
+                    },
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                    "queries": {
+                        "folderPath": "/feed",
+                        "name": "@variables('FileName')",
+                        "queryParametersSingleEncoded": true
+                    }
+                },
+                "runAfter": {
+                    "Initialize-Var-FileName": [
+                        "Succeeded"
+                    ]
+                },
+                "runtimeConfiguration": {
+                    "contentTransfer": {
+                        "transferMode": "Chunked"
+                    }
+                },
+                "type": "ApiConnection"
+            },
+            "Create-Blob-Get-Coffee": {
+                "inputs": {
+                    "body": "@body('HTTP_Get_Coffee')",
+                    "headers": {
+                        "ReadFileMetadataFromServer": true
+                    },
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                    "queries": {
+                        "folderPath": "/feed",
+                        "name": "coffee",
+                        "queryParametersSingleEncoded": true
+                    }
+                },
+                "runAfter": {
+                    "HTTP_Get_Coffee": [
+                        "Succeeded"
+                    ]
+                },
+                "runtimeConfiguration": {
+                    "contentTransfer": {
+                        "transferMode": "Chunked"
+                    }
+                },
+                "type": "ApiConnection"
+            },
+            "Create-Blob-Parsed-Coffee": {
+                "inputs": {
+                    "body": "@body('JS-Parse-Coffee')",
+                    "headers": {
+                        "ReadFileMetadataFromServer": true
+                    },
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                    "queries": {
+                        "folderPath": "/feed",
+                        "name": "coffee_parse",
+                        "queryParametersSingleEncoded": true
+                    }
+                },
+                "runAfter": {
+                    "JS-Parse-Coffee": [
+                        "Succeeded"
+                    ]
+                },
+                "runtimeConfiguration": {
+                    "contentTransfer": {
+                        "transferMode": "Chunked"
+                    }
+                },
+                "type": "ApiConnection"
+            },
+            "Create-Blob-WorkflowName": {
+                "inputs": {
+                    "body": "@actions('JS-GetWorkflowName').outputs.body",
+                    "headers": {
+                        "ReadFileMetadataFromServer": true
+                    },
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                    "queries": {
+                        "folderPath": "/feed",
+                        "name": "@{concat(formatDateTime(utcNow(), 'ddMMyyyyhhmmss'), '.txt')}",
+                        "queryParametersSingleEncoded": true
+                    }
+                },
+                "runAfter": {
+                    "JS-GetWorkflowName": [
+                        "Succeeded"
+                    ]
+                },
+                "runtimeConfiguration": {
+                    "contentTransfer": {
+                        "transferMode": "Chunked"
+                    }
+                },
+                "type": "ApiConnection"
+            },
+            "HTTP-Post-Coffee": {
+                "inputs": {
+                    "body": "@body('JS-GetWorkflowName')",
+                    "method": "POST",
+                    "uri": "https://fkarnagi.free.beeceptor.com/my/api/path"
+                },
+                "runAfter": {
+                    "JS-Parse-Coffee": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http"
+            },
+            "HTTP_Get_Coffee": {
+                "inputs": {
+                    "method": "GET",
+                    "uri": "https://api.sampleapis.com/coffee/hot"
+                },
+                "runAfter": {
+                    "Create-Blob-WorkflowName": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http"
+            },
+            "Initialize-Var-FileName": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "FileName",
+                            "type": "string",
+                            "value": "@{utcNow()}"
+                        }
+                    ]
+                },
+                "runAfter": {},
+                "type": "InitializeVariable"
+            },
+            "JS-GetWorkflowName": {
+                "inputs": {
+                    "code": "var text = \"Hello world from \" + workflowContext.workflow.name;\r\n\r\nreturn text;"
+                },
+                "runAfter": {
+                    "Create-Blob-FileName": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "JavaScriptCode"
+            },
+            "JS-Parse-Coffee": {
+                "inputs": {
+                    "code": "var text = workflowContext.actions.HTTP_Get_Coffee.outputs.body;\r\n\r\nfunction convert(a) {\r\n  return {\r\n      \"title\": a.title\r\n  }\r\n}\r\nreturn text.map(convert);"
+                },
+                "runAfter": {
+                    "HTTP_Get_Coffee": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "JavaScriptCode"
+            },
+            "Send-Response-To-HTTP": {
+                "inputs": {
+                    "body": "@body('JS-Parse-Coffee')",
+                    "statusCode": 200
+                },
+                "runAfter": {
+                    "Create-Blob-Get-Coffee": [
+                        "Succeeded"
+                    ],
+                    "Create-Blob-Parsed-Coffee": [
+                        "Succeeded"
+                    ],
+                    "HTTP-Post-Coffee": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Response"
+            }
+        },
+        "contentVersion": "1.0.0.0",
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "defaultValue": {},
+                "type": "Object"
+            }
+        },
+        "triggers": {
+            "request": {
+                "inputs": {
+                    "schema": {}
+                },
+                "kind": "Http",
+                "type": "Request"
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "value": {
+                "azureblob": {
+                    "connectionId": "/subscriptions/e619b87f-4da7-480d-8c79-a97003e5d6ae/resourceGroups/devops/providers/Microsoft.Web/connections/azureblob-1",
+                    "connectionName": "azureblob-1",
+                    "id": "/subscriptions/e619b87f-4da7-480d-8c79-a97003e5d6ae/providers/Microsoft.Web/locations/southeastasia/managedApis/azureblob"
+                }
+            }
+        }
+    }
+}
